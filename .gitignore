@@ -1,0 +1,91 @@
+# ----------------------
+# Python-generated files
+# ----------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.py[oc]
+*.so
+
+# Distribution / packaging
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# pip / poetry / pipenv
+.poetry/
+pip-wheel-metadata/
+Pipfile.lock
+poetry.lock
+
+# ----------------------
+# IDEs
+# ----------------------
+
+# JetBrains (PyCharm)
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Sublime
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+
+# ----------------------
+# OS-specific garbage
+# ----------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------
+# Logs / temp
+# ----------------------
+*.log
+*.tmp
+tmp/
+temp/
+.cache/
+.buildcache/
+
+# ----------------------
+# Testing
+# ----------------------
+htmlcov/
+.coverage
+.coverage.*
+pytest_cache/
+.tox/
+.nox/
+
+# ----------------------
+# Env/config
+# ----------------------
+*.env
+*.env.*
+*.local
+*.secret
+.envrc
+
+# ----------------------
+# Project-specific
+# ----------------------
+debug/
+out/
+models/
