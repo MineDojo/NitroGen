@@ -44,7 +44,9 @@ cd NitroGen-real-time
 huggingface-cli download nvidia/NitroGen --local-dir ./models ng.pt
 ```
 
-### Option 1: Docker (Recommended)
+### Model Server
+
+#### Option 1: Docker (Recommended)
 
 Docker handles CUDA setup automatically — no manual configuration needed.
 
@@ -53,20 +55,25 @@ docker compose up --build --force-recreate
 # use -d flag to run in the background
 ```
 
-### Option 2: Local
+Install dependencies for `play.py`:
+```bash
+pip install .[play]
+```
+
+#### Option 2: Local
 
 Requires manual CUDA setup on your system.
 
 ```bash
 pip install uv
 
-# Choose your CUDA version (cu126, cu128, cu129, or cpu)
+# Choose your CUDA version (cu126, cu128, cu129, cu130)
 uv sync --extra cu129
 ```
 
 ## Usage
 
-Run the agent on any supported game:
+Start the game, then run the agent:
 
 ```bash
 python scripts/play.py --process '<game_executable_name>.exe'
