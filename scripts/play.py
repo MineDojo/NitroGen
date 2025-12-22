@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import threading
 from pathlib import Path
 from collections import OrderedDict
 
@@ -15,6 +16,37 @@ from nitrogen.inference_viz import create_viz, VideoRecorder
 from nitrogen.inference_client import ModelClient
 
 import argparse
+
+
+class ActionState:
+    """Thread-safe container for current action predictions."""
+
+    def __init__(self, default_action):
+        self.actions = []
+        self.index = 0
+        self.lock = threading.Lock()
+        self.default_action = default_action
+
+    def update(self, new_actions: list):
+        """Replace queue with new predictions (called by inference thread)."""
+        with self.lock:
+            self.actions = new_actions
+            self.index = 0
+
+    def get_next(self) -> dict:
+        """Get next action, or repeat last, or return default."""
+        with self.lock:
+            if not self.actions:
+                return self.default_action
+
+            if self.index < len(self.actions):
+                action = self.actions[self.index]
+                self.index += 1
+                return action
+            else:
+                return self.actions[-1]
+
+
 parser = argparse.ArgumentParser(description="VLM Inference")
 parser.add_argument("--process", type=str, default="celeste.exe", help="Game to play")
 parser.add_argument("--allow-menu", action="store_true", help="Allow menu actions (Disabled by default)")
@@ -22,6 +54,8 @@ parser.add_argument("--port", type=int, default=5555, help="Port for model serve
 parser.add_argument("--no-record", action="store_true", help="Disable video recording for faster inference")
 parser.add_argument("--no-debug-save", action="store_true", help="Disable debug PNG saving")
 parser.add_argument("--actions-per-step", type=int, default=None, help="Use only first N actions per predict (receding horizon). Default: use all")
+parser.add_argument("--async", dest="async_mode", action="store_true", default=True, help="Async mode: game runs in real-time, inference in background (default)")
+parser.add_argument("--sync", dest="async_mode", action="store_false", help="Sync mode: game paused during inference (uses speedhack)")
 
 args = parser.parse_args()
 
@@ -88,6 +122,76 @@ zero_action = OrderedDict(
 
 TOKEN_SET = BUTTON_ACTION_TOKENS
 
+
+def convert_predictions_to_actions(pred, no_menu=True):
+    """Convert model predictions to gamepad actions."""
+    j_left, j_right, buttons = pred["j_left"], pred["j_right"], pred["buttons"]
+    n = len(buttons)
+
+    env_actions = []
+    for i in range(n):
+        move_action = zero_action.copy()
+
+        xl, yl = j_left[i]
+        xr, yr = j_right[i]
+        move_action["AXIS_LEFTX"] = np.array([int(xl * 32767)], dtype=np.long)
+        move_action["AXIS_LEFTY"] = np.array([int(yl * 32767)], dtype=np.long)
+        move_action["AXIS_RIGHTX"] = np.array([int(xr * 32767)], dtype=np.long)
+        move_action["AXIS_RIGHTY"] = np.array([int(yr * 32767)], dtype=np.long)
+
+        button_vector = buttons[i]
+        for name, value in zip(TOKEN_SET, button_vector):
+            if "TRIGGER" in name:
+                move_action[name] = np.array([value * 255], dtype=np.long)
+            else:
+                move_action[name] = 1 if value > BUTTON_PRESS_THRES else 0
+
+        if no_menu:
+            move_action["GUIDE"] = 0
+            move_action["START"] = 0
+            move_action["BACK"] = 0
+
+        env_actions.append(move_action)
+
+    return env_actions
+
+
+def inference_worker(env, policy, action_state, stop_event, preprocess_fn, no_menu):
+    """Background thread for model inference."""
+    while not stop_event.is_set():
+        try:
+            obs = env.render()
+            obs = preprocess_fn(obs)
+            pred = policy.predict(obs)
+            env_actions = convert_predictions_to_actions(pred, no_menu=no_menu)
+            action_state.update(env_actions)
+        except Exception as e:
+            print(f"Inference error: {e}")
+            time.sleep(0.1)
+
+
+def run_async_loop(env, action_state, stop_event, fps=60):
+    """Main loop: apply actions at fixed rate without pausing game."""
+    frame_time = 1.0 / fps
+    step_count = 0
+
+    print(f"Async mode: applying actions at {fps} FPS")
+
+    while not stop_event.is_set():
+        start = time.perf_counter()
+
+        action = action_state.get_next()
+        env.apply_action(action)
+
+        step_count += 1
+        if step_count % 60 == 0:
+            print(f"Applied {step_count} actions")
+
+        elapsed = time.perf_counter() - start
+        if elapsed < frame_time:
+            time.sleep(frame_time - elapsed)
+
+
 print("Model loaded, starting environment...")
 if args.actions_per_step:
     print(f"Receding horizon mode: using {args.actions_per_step} actions per predict (model outputs 18)")
@@ -144,11 +248,17 @@ if args.process == "Cuphead.exe":
         time.sleep(0.3)
 
 env.reset()
-env.pause()
+
+# Only pause in sync mode (speedhack)
+if not args.async_mode:
+    env.pause()
 
 
-# Initial call to get state
-obs, reward, terminated, truncated, info = env.step(action=zero_action)
+# Initial call to get state (only needed for sync mode)
+if not args.async_mode:
+    obs, reward, terminated, truncated, info = env.step(action=zero_action)
+else:
+    obs = env.render()
 
 frames = None
 step_count = 0
@@ -236,10 +346,35 @@ def run_loop(debug_recorder=None, clean_recorder=None):
         env.unpause()
         env.close()
 
-if args.no_record:
-    print("Recording disabled for faster inference")
-    run_loop()
+if args.async_mode:
+    # Async mode: game runs in real-time, inference in background
+    print("Starting async mode (no speedhack, real-time gameplay)")
+
+    action_state = ActionState(zero_action)
+    stop_event = threading.Event()
+
+    inference_thread = threading.Thread(
+        target=inference_worker,
+        args=(env, policy, action_state, stop_event, preprocess_img, NO_MENU),
+        daemon=True
+    )
+    inference_thread.start()
+
+    try:
+        run_async_loop(env, action_state, stop_event, fps=60)
+    except KeyboardInterrupt:
+        print("\nStopping...")
+    finally:
+        stop_event.set()
+        inference_thread.join(timeout=2.0)
+        env.close()
 else:
-    with VideoRecorder(str(PATH_MP4_DEBUG), fps=60, crf=32, preset="medium") as debug_recorder:
-        with VideoRecorder(str(PATH_MP4_CLEAN), fps=60, crf=28, preset="medium") as clean_recorder:
-            run_loop(debug_recorder, clean_recorder)
+    # Sync mode: original behavior with speedhack
+    print("Starting sync mode (with speedhack)")
+    if args.no_record:
+        print("Recording disabled for faster inference")
+        run_loop()
+    else:
+        with VideoRecorder(str(PATH_MP4_DEBUG), fps=60, crf=32, preset="medium") as debug_recorder:
+            with VideoRecorder(str(PATH_MP4_CLEAN), fps=60, crf=28, preset="medium") as clean_recorder:
+                run_loop(debug_recorder, clean_recorder)
