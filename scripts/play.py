@@ -56,6 +56,8 @@ parser.add_argument("--no-debug-save", action="store_true", help="Disable debug 
 parser.add_argument("--actions-per-step", type=int, default=None, help="Use only first N actions per predict (receding horizon). Default: use all")
 parser.add_argument("--async", dest="async_mode", action="store_true", default=True, help="Async mode: game runs in real-time, inference in background (default)")
 parser.add_argument("--sync", dest="async_mode", action="store_false", help="Sync mode: game paused during inference (uses speedhack)")
+parser.add_argument("--width", type=int, default=1920, help="Game capture width (default: 1920)")
+parser.add_argument("--height", type=int, default=1080, help="Game capture height (default: 1080)")
 
 args = parser.parse_args()
 
@@ -203,6 +205,8 @@ for i in range(3):
 
 env = GamepadEnv(
     game=args.process,
+    image_width=args.width,
+    image_height=args.height,
     game_speed=1.0,
     env_fps=60,
     async_mode=True,
@@ -319,7 +323,7 @@ def run_loop(debug_recorder=None, clean_recorder=None):
 
                     if debug_recorder and clean_recorder:
                         obs_viz = np.array(obs).copy()
-                        clean_viz = cv2.resize(obs_viz, (1920, 1080), interpolation=cv2.INTER_AREA)
+                        clean_viz = cv2.resize(obs_viz, (args.width, args.height), interpolation=cv2.INTER_AREA)
                         debug_viz = create_viz(
                             cv2.resize(obs_viz, (1280, 720), interpolation=cv2.INTER_AREA),
                             i, j_left, j_right, buttons, token_set=TOKEN_SET
