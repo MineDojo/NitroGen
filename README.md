@@ -1,80 +1,105 @@
 <img src="assets/github_banner.gif" width="100%" />
 
+> Fork of [MineDojo/NitroGen](https://github.com/MineDojo/NitroGen) with real-time improvements
+
 <div align="center">
-  <p style="font-size: 1.2em;">
-    <a href="https://nitrogen.minedojo.org/"><strong>Website</strong></a> | 
+  <p>
+    <a href="https://nitrogen.minedojo.org/"><strong>Website</strong></a> |
     <a href="https://huggingface.co/nvidia/NitroGen"><strong>Model</strong></a> |
     <a href="https://huggingface.co/datasets/nvidia/NitroGen"><strong>Dataset</strong></a> |
     <a href="https://nitrogen.minedojo.org/assets/documents/nitrogen.pdf"><strong>Paper</strong></a>
   </p>
 </div>
 
-
-# NitroGen
+## About
 
 NitroGen is an open foundation model for generalist gaming agents. This multi-game model takes pixel input and predicts gamepad actions.
 
-NitroGen is trained through behavior cloning on the largest video-action gameplay dataset, assembled exclusively from internet videos. It can be adapted via post-training to unseen games.
+### Fork Improvements
 
-# Installation
+- **Real-time processing** — real FPS without interruptions
+- **Simplified launch via Docker**
+- **Improved game window search**
+- **Use any window resolution**
+- **Faster image processing**
+- **Enhanced CUDA support**
+- **Process ID support** — specify process IDs instead of just names
 
-## Prerequisites
+## Requirements
 
-We **do not distribute game environments**, you must use your own copies of the games. This repository only supports running the agent on **Windows games**. You can serve the model from a Linux machine for inference, but the game ultimately has to run on Windows. We have tested on Windows 11 with Python == 3.12.
+| Component | Requirement |
+|-----------|-------------|
+| OS | Windows 11 |
+| Python | 3.12 |
+| GPU VRAM | ~10 GB (tested on RTX 5060 Ti 16GB) |
+| Game | Your own copy (not distributed) |
 
-## Setup
+## Installation
 
-Install this repo:
 ```bash
-git clone https://github.com/dffdeeq/NitroGen-improved.git
-cd NitroGen-improved
+git clone https://github.com/dffdeeq/NitroGen-real-time.git
+cd NitroGen-real-time
 
+# Download model from HuggingFace
+huggingface-cli download nvidia/NitroGen --local-dir ./models ng.pt
+```
+
+### Option 1: Docker (Recommended)
+
+Docker handles CUDA setup automatically — no manual configuration needed.
+
+```bash
+docker compose up --build --force-recreate
+# use -d flag to run in the background
+```
+
+### Option 2: Local
+
+Requires manual CUDA setup on your system.
+
+```bash
 pip install uv
-# You can use different CUDA versions with installation (cu126, cu128, cu129, cpu(currently unavailable)), for example we use 12.9 CUDA version: 
+
+# Choose your CUDA version (cu126, cu128, cu129, or cpu)
 uv sync --extra cu129
 ```
 
-Download NitroGen checkpoint from [HuggingFace](https://huggingface.co/nvidia/NitroGen):
-```bash
-hf download nvidia/NitroGen --local-dir ./models ng.pt
-```
+## Usage
 
-# Getting Started
+Run the agent on any supported game:
 
-First, start an inference server for the model:
-```bash
-python scripts/serve.py ./models/ng.pt
-```
-
-Then, run the agent on the game of your choice:
 ```bash
 python scripts/play.py --process '<game_executable_name>.exe'
 ```
 
-The `--process` parameter must be the exact executable name or ID of the game you want to play. You can find it by right-clicking on the game process in Windows Task Manager (Ctrl+Shift+Esc), and selecting `Properties`. The process name should be in the `General` tab and end with `.exe`. 
+### Parameters
 
-For the exact ID you can execute this command in PowerShell (Might help with windows that runs inside other processes like Minecraft in javaw.exe):
+| Parameter | Description |
+|-----------|-------------|
+| `--process` | Game executable name or process ID |
+| `--width` | Game capture width (default: 1920) |
+| `--height` | Game capture height (default: 1080) |
+| `--no-record` | Disable video recording (better performance) |
+| `--no-debug-save` | Disable debug saves |
+| `--actions-per-step` | Actions per inference (default: 18) |
+
+For maximum performance:
+```bash
+python scripts/play.py --process '<game>.exe' --no-record --no-debug-save --actions-per-step 18
 ```
-Get-Process {process_name} | Select-Object Id, ProcessName, MainWindowTitle | Format-Table -Auto
+
+### Finding Process Name
+
+1. Open Task Manager (`Ctrl+Shift+Esc`)
+2. Right-click the game process → **Properties**
+3. Copy the name from **General** tab (ends with `.exe`)
+
+For processes running inside other executables (like Minecraft in `javaw.exe`), use PowerShell:
+
+```powershell
+Get-Process <process_name> | Select-Object Id, ProcessName, MainWindowTitle | Format-Table -Auto
 ```
 
-<!-- TODO # Paper and Citation
+## Disclaimer
 
-If you find our work useful, please consider citing us!
-
-```bibtex
-@article{,
-  title   = {},
-  author  = {},
-  year    = {},
-  journal = {}
-}
-``` -->
-
-# Disclaimer:
-- This project is strictly for research purposes and is not an official NVIDIA product. 
-- This repo is fork of [MineDojo/NitroGen](https://github.com/MineDojo/NitroGen) and contains some improvements:
-  - Faster image processing
-  - Enhanced CUDA support
-  - Improved game window search
-  - Ability to specify process IDs instead of just names
+This project is strictly for research purposes and is not an official NVIDIA product.
