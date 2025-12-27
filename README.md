@@ -49,23 +49,22 @@ python scripts/play.py --process '<game_executable_name>.exe'
 ```
 
 The `--process` parameter must be the exact executable name of the game you want to play. You can find it by right-clicking on the game process in Windows Task Manager (Ctrl+Shift+Esc), and selecting `Properties`. The process name should be in the `General` tab and end with `.exe`.
-
 By default, screen capture uses the game window resolution. You can override it with `--width` and `--height`:
 ```bash
 python scripts/play.py --process '<game_executable_name>.exe' --width 1920 --height 1080
 ```
 
-<!-- TODO # Paper and Citation
+# Paper and Citation
 
 If you find our work useful, please consider citing us!
 
 ```bibtex
-@article{,
-  title   = {},
-  author  = {},
-  year    = {},
-  journal = {}
+@misc{Magne2025NitroGen,
+  title        = {NitroGen: An Open Foundation Model for Generalist Gaming Agents},
+  author       = {Magne, Lo{\"\i}c and Awadalla, Anas and Wang, Guanzhi and Xu, Yinzhen and Belofsky, Joshua and Hu, Fengyuan and Kim, Joohwan and Schmidt, Ludwig and Gkioxari, Georgia and Kautz, Jan and Yue, Yisong and Choi, Yejin and Zhu, Yuke and Fan, Linxi},
+  year         = {2025},
+  howpublished = {\url{https://nitrogen.minedojo.org/}},
 }
-``` -->
+```
 
 **Disclaimer**: This project is strictly for research purposes and is not an official NVIDIA product.
