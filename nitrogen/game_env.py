@@ -1,5 +1,6 @@
 import time
 import platform
+import ctypes
 
 import pyautogui
 import dxcam
@@ -21,6 +22,10 @@ import win32gui
 import win32api
 import win32con
 
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    ctypes.windll.user32.SetProcessDPIAware()
 
 def get_process_info(process_name):
     """
@@ -468,7 +473,7 @@ class GamepadEnv(Env):
 
         self.game_window.activate()
         l, t, r, b = self.game_window.left, self.game_window.top, self.game_window.right, self.game_window.bottom
-        self.bbox = (l, t, r - l, b - t)
+        self.bbox = (l, t, r, b)
 
         # Initialize speedhack client if using DLL injection
         self.speedhack_client = xsh.Client(process_id=self.game_pid, arch=self.game_arch)
