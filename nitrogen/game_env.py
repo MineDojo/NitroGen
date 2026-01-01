@@ -22,6 +22,29 @@ import win32api
 import win32con
 
 
+def _get_pe_architecture(exe_path):
+    """Return 'x86' or 'x64' by reading the PE header, or None if unknown."""
+    try:
+        with open(exe_path, "rb") as handle:
+            dos_header = handle.read(64)
+            if len(dos_header) < 64 or dos_header[:2] != b"MZ":
+                return None
+            pe_offset = int.from_bytes(dos_header[0x3C:0x40], "little")
+            handle.seek(pe_offset)
+            pe_header = handle.read(6)
+            if len(pe_header) < 6 or pe_header[:4] != b"PE\x00\x00":
+                return None
+            machine = int.from_bytes(pe_header[4:6], "little")
+    except (OSError, ValueError):
+        return None
+
+    if machine == 0x14C:
+        return "x86"
+    if machine == 0x8664:
+        return "x64"
+    return None
+
+
 def get_process_info(process_name):
     """
     Get process information for a given process name on Windows.
@@ -42,20 +65,45 @@ def get_process_info(process_name):
                 pid = proc.info['pid']
 
                 # Get architecture
+                architecture = "unknown"
+                process_handle = None
                 try:
-                    # Check if process is 32-bit or 64-bit
                     process_handle = win32api.OpenProcess(
                         win32con.PROCESS_QUERY_INFORMATION,
                         False,
                         pid
                     )
-                    is_wow64 = win32process.IsWow64Process(process_handle)
-                    win32api.CloseHandle(process_handle)
+                except Exception:
+                    try:
+                        process_handle = win32api.OpenProcess(
+                            win32con.PROCESS_QUERY_LIMITED_INFORMATION,
+                            False,
+                            pid
+                        )
+                    except Exception:
+                        process_handle = None
 
-                    # On 64-bit Windows: WOW64 means "Windows 32-bit on Windows 64-bit", i.e. a 32-bit process
-                    architecture = "x86" if is_wow64 else "x64"
-                except:
-                    architecture = "unknown"
+                if process_handle:
+                    try:
+                        is_wow64 = win32process.IsWow64Process(process_handle)
+                        # On 64-bit Windows: WOW64 means "Windows 32-bit on Windows 64-bit".
+                        architecture = "x86" if is_wow64 else "x64"
+                    except Exception:
+                        architecture = "unknown"
+                    finally:
+                        win32api.CloseHandle(process_handle)
+
+                if architecture == "unknown":
+                    # Fallback to the executable's PE header when process handle access is denied.
+                    try:
+                        exe_path = proc.exe()
+                    except (psutil.Error, OSError):
+                        exe_path = None
+
+                    if exe_path:
+                        pe_arch = _get_pe_architecture(exe_path)
+                        if pe_arch:
+                            architecture = pe_arch
 
                 # Find windows associated with this PID
                 windows = []
@@ -394,6 +442,7 @@ class GamepadEnv(Env):
             env_fps=10,
             async_mode=True,
             screenshot_backend="dxcam",
+            game_arch=None,
     ):
         super().__init__()
 
@@ -416,6 +465,8 @@ class GamepadEnv(Env):
 
         self.game_pid = proc_info["pid"]
         self.game_arch = proc_info["architecture"]
+        if game_arch is not None:
+            self.game_arch = str(game_arch).lower()
         self.game_window_name = proc_info["window_name"]
 
         print(
@@ -423,6 +474,11 @@ class GamepadEnv(Env):
 
         if self.game_pid is None:
             raise Exception(f"Could not find PID for game: {game}")
+        if self.game_arch not in ["x86", "x64"]:
+            raise ValueError(
+                f"Unable to determine architecture for process '{self.game}' (PID {self.game_pid}). "
+                "Try running as admin or pass game_arch='x86' or 'x64'."
+            )
 
         self.observation_space = Box(
             low=0, high=255, shape=(self.image_height, self.image_width, 3), dtype="uint8"
