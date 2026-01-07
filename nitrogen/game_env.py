@@ -350,12 +350,14 @@ class PyautoguiScreenshotBackend:
 
 
 class DxcamScreenshotBackend:
-    def __init__(self, bbox, fps):
+    def __init__(self, bbox_ltrb, fps):
         import dxcam
         self.camera = dxcam.create()
-        self.bbox = bbox
+        self.bbox_ltrb = bbox_ltrb
+        self.width = bbox_ltrb[2] - bbox_ltrb[0]
+        self.height = bbox_ltrb[3] - bbox_ltrb[1]
         self.last_screenshot = None
-        self.camera.start(region=self.bbox, target_fps=fps, video_mode=True)
+        self.camera.start(region=self.bbox_ltrb, target_fps=fps, video_mode=True)
 
     def screenshot(self):
         screenshot = self.camera.get_latest_frame()
@@ -364,7 +366,7 @@ class DxcamScreenshotBackend:
             if self.last_screenshot is not None:
                 return self.last_screenshot
             else:
-                return Image.new("RGB", (self.bbox[2], self.bbox[3]), (0, 0, 0))
+                return Image.new("RGB", (self.width, self.height), (0, 0, 0))
         screenshot = Image.fromarray(screenshot)
         self.last_screenshot = screenshot
         return screenshot
@@ -387,8 +389,8 @@ class GamepadEnv(Env):
     def __init__(
             self,
             game,
-            image_height=1440,
-            image_width=2560,
+            image_height=None,
+            image_width=None,
             controller_type="xbox",
             game_speed=1.0,
             env_fps=10,
@@ -404,8 +406,8 @@ class GamepadEnv(Env):
         assert screenshot_backend in ["pyautogui", "dxcam"], "Screenshot backend must be either 'pyautogui' or 'dxcam'"
 
         self.game = game
-        self.image_height = int(image_height)
-        self.image_width = int(image_width)
+        self._image_height_override = image_height
+        self._image_width_override = image_width
         self.game_speed = game_speed
         self.env_fps = env_fps
         self.step_duration = self.calculate_step_duration()
@@ -423,10 +425,6 @@ class GamepadEnv(Env):
 
         if self.game_pid is None:
             raise Exception(f"Could not find PID for game: {game}")
-
-        self.observation_space = Box(
-            low=0, high=255, shape=(self.image_height, self.image_width, 3), dtype="uint8"
-        )
 
         # Define a unified action space
         self.action_space = Dict(
@@ -468,16 +466,28 @@ class GamepadEnv(Env):
 
         self.game_window.activate()
         l, t, r, b = self.game_window.left, self.game_window.top, self.game_window.right, self.game_window.bottom
-        self.bbox = (l, t, r - l, b - t)
+        window_width, window_height = r - l, b - t
+
+        # Use window size if not explicitly set
+        self.image_width = self._image_width_override if self._image_width_override else window_width
+        self.image_height = self._image_height_override if self._image_height_override else window_height
+
+        # bbox formats: dxcam needs (l,t,r,b), pyautogui needs (l,t,w,h)
+        self.bbox_ltrb = (l, t, r, b)
+        self.bbox_ltwh = (l, t, window_width, window_height)
+
+        self.observation_space = Box(
+            low=0, high=255, shape=(self.image_height, self.image_width, 3), dtype="uint8"
+        )
 
         # Initialize speedhack client if using DLL injection
         self.speedhack_client = xsh.Client(process_id=self.game_pid, arch=self.game_arch)
 
         # Get the screenshot backend
         if screenshot_backend == "dxcam":
-            self.screenshot_backend = DxcamScreenshotBackend(self.bbox, self.env_fps)
+            self.screenshot_backend = DxcamScreenshotBackend(self.bbox_ltrb, self.env_fps)
         elif screenshot_backend == "pyautogui":
-            self.screenshot_backend = PyautoguiScreenshotBackend(self.bbox)
+            self.screenshot_backend = PyautoguiScreenshotBackend(self.bbox_ltwh)
         else:
             raise ValueError("Unsupported screenshot backend. Use 'dxcam' or 'pyautogui'.")
 
