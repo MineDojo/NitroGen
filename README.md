@@ -12,9 +12,11 @@
 
 # NitroGen
 
-NitroGen is an open foundation model for generalist gaming agents. This multi-game model takes pixel input and predicts gamepad actions.
+NitroGen is an open foundation model for generalist gaming agents. This multi-game model takes pixel input and predicts gamepad actions. It is trained through behavior cloning on the largest video-action gameplay dataset, assembled exclusively from internet videos. It can be adapted via post-training to unseen games.
 
-NitroGen is trained through behavior cloning on the largest video-action gameplay dataset, assembled exclusively from internet videos. It can be adapted via post-training to unseen games.
+> [!IMPORTANT]
+> NitroGen is a research project to enable training generalist agent from internet data, please refer to the [paper](https://arxiv.org/abs/2601.02427) for full details. The current model is a 500M parameter DiT that can only see the last frame. Therefore it has no ability yet to plan over long horizons, play games end-to-end, self improve over time, or play completely unseen game. It is a fast-reacting system-1 sensory model
+
 
 # Installation
 
