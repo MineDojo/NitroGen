@@ -19,6 +19,8 @@ parser = argparse.ArgumentParser(description="VLM Inference")
 parser.add_argument("--process", type=str, default="celeste.exe", help="Game to play")
 parser.add_argument("--allow-menu", action="store_true", help="Allow menu actions (Disabled by default)")
 parser.add_argument("--port", type=int, default=5555, help="Port for model server")
+parser.add_argument("--width", type=int, default=None, help="Override capture width")
+parser.add_argument("--height", type=int, default=None, help="Override capture height")
 
 args = parser.parse_args()
 
@@ -92,6 +94,8 @@ for i in range(3):
 
 env = GamepadEnv(
     game=args.process,
+    image_width=args.width,
+    image_height=args.height,
     game_speed=1.0,
     env_fps=60,
     async_mode=True,
